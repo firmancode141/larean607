@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเช็คชื่อ ม.6/7 (Auto Save)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome (Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js for Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .student-card {
+            transition: all 0.2s ease;
+        }
+        .student-card:hover {
+            background-color: #f9fafb;
+        }
+        .status-btn {
+            transition: all 0.2s;
+        }
+        .status-btn.active {
+            transform: scale(1.05);
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .modal-enter {
+            animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        /* Saving Indicator */
+        .saving-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: opacity 0.3s;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .saving-indicator.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Saving Indicator -->
+    <div id="savingIndicator" class="saving-indicator">
+        <i class="fa-solid fa-circle-notch fa-spin text-blue-400"></i>
+        <span>กำลังบันทึกข้อมูล...</span>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto px-4 py-3">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg">
+                        <i class="fa-solid fa-user-graduate text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800 leading-tight">ระบบเช็คชื่อ ม.6/7</h1>
+                        <p class="text-xs text-gray-500">ภาคเรียนที่ 2 ปีการศึกษา 2568</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 w-full md:w-auto bg-gray-100 p-1 rounded-lg">
+                    <button onclick="changeDate(-1)" class="w-10 h-10 flex items-center justify-center hover:bg-white rounded-md transition text-gray-600">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <div class="flex-1 text-center px-4 font-semibold text-gray-700 min-w-[180px]" id="currentDateDisplay">
+                        <i class="fa-solid fa-sync fa-spin text-xs"></i> เทียบเวลา...
+                    </div>
+                    <button onclick="changeDate(1)" class="w-10 h-10 flex items-center justify-center hover:bg-white rounded-md transition text-gray-600">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <div class="flex gap-2 w-full md:w-auto">
+                    <!-- ปุ่ม Google Sheet (Manual Edit) [NEW] -->
+                    <a href="https://docs.google.com/spreadsheets/d/1trlXwu_AOoHOm-BXe9OrsWCCLq6QVw7C_hXrYjMgNDE/edit?usp=sharing" target="_blank" class="flex-none flex items-center justify-center gap-2 px-3 py-2 bg-yellow-50 text-yellow-600 rounded-lg font-medium hover:bg-yellow-100 transition border border-yellow-200" title="แก้ไขข้อมูลใน Google Sheet">
+                        <i class="fa-solid fa-file-pen"></i>
+                    </a>
+
+                    <!-- ปุ่ม Dashboard -->
+                    <button onclick="openAdminLogin()" class="flex-none flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg font-medium hover:bg-indigo-100 transition border border-indigo-200" title="สถิติ (Admin)">
+                        <i class="fa-solid fa-chart-pie"></i>
+                    </button>
+
+                    <!-- ปุ่ม Export -->
+                    <button onclick="openExportModal()" class="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition shadow-md shadow-green-200 active:scale-95">
+                        <i class="fa-brands fa-line"></i>
+                        <span class="hidden sm:inline">ส่งออก</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Auto Leave & Tools Sub-menu -->
+             <div class="mt-2 flex justify-end">
+                 <button onclick="openAutoLeaveModal()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 transition">
+                    <i class="fa-solid fa-clock-rotate-left"></i> จัดการการลาล่วงหน้า
+                 </button>
+             </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-4xl mx-auto px-4 py-6 mb-20">
+        
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-4 gap-3 mb-6">
+            <div class="bg-white p-4 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div class="text-3xl font-bold text-green-600" id="count-present">0</div>
+                <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-circle-check mr-1"></i>มาเรียน</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div class="text-3xl font-bold text-yellow-500" id="count-sick">0</div>
+                <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-bed-pulse mr-1"></i>ลาป่วย</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div class="text-3xl font-bold text-blue-500" id="count-business">0</div>
+                <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-briefcase mr-1"></i>ลากิจ</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-gray-200 text-center shadow-sm">
+                <div class="text-3xl font-bold text-red-500" id="count-absent">0</div>
+                <div class="text-xs text-gray-500 mt-1"><i class="fa-solid fa-circle-xmark mr-1"></i>ขาด</div>
+            </div>
+        </div>
+
+        <!-- Student List Container -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="bg-gray-50 px-6 py-3 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="font-bold text-gray-700 flex items-center gap-2">
+                    <i class="fa-solid fa-list-ol text-gray-400"></i>
+                    รายชื่อนักเรียน
+                </h2>
+                <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-md">ทั้งหมด 29 คน</span>
+            </div>
+            <div id="studentList" class="divide-y divide-gray-100">
+                <!-- Javascript will inject students here -->
+                <div class="p-8 text-center text-gray-400">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                    <p>กำลังเชื่อมต่อฐานข้อมูล...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Admin Login Modal -->
+    <div id="adminLoginModal" class="fixed inset-0 bg-black/50 z-[70] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl modal-enter overflow-hidden">
+            <div class="p-6">
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <h3 class="font-bold text-xl text-gray-800">ผู้ดูแลระบบ</h3>
+                    <p class="text-sm text-gray-500">กรุณากรอกรหัสผ่านเพื่อเข้าถึงแดชบอร์ด</p>
+                </div>
+                <input type="password" id="adminPassword" placeholder="รหัสผ่าน (000123)" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg text-center text-lg focus:border-indigo-500 outline-none mb-4">
+                <button onclick="checkAdminPassword()" class="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition">
+                    เข้าสู่ระบบ
+                </button>
+                <button onclick="closeAdminLogin()" class="w-full mt-2 py-2 text-gray-500 hover:text-gray-700 text-sm">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Modal -->
+    <div id="dashboardModal" class="fixed inset-0 bg-black/50 z-[65] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-4xl shadow-2xl modal-enter overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-chart-line mr-2 text-indigo-600"></i>สรุปสถิติการลา</h3>
+                <button onclick="closeDashboard()" class="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <!-- Filter Tabs -->
+            <div class="flex flex-wrap border-b border-gray-200 bg-white">
+                <button onclick="loadDashboard('today')" id="tab-today" class="flex-1 py-3 text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/50">วันนี้</button>
+                <button onclick="loadDashboard('week')" id="tab-week" class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700">สัปดาห์นี้</button>
+                <button onclick="loadDashboard('month')" id="tab-month" class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700">เดือนนี้</button>
+                <button onclick="loadDashboard('custom')" id="tab-custom" class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700">กำหนดเอง</button>
+            </div>
+
+            <!-- Custom Range Selector (Hidden by default) -->
+            <div id="customRangeSelector" class="hidden bg-indigo-50 p-4 border-b border-indigo-100 flex flex-col sm:flex-row gap-3 items-center justify-center animate-in slide-in-from-top-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-indigo-700">เริ่ม:</span>
+                    <input type="date" id="dash-start" class="p-2 border border-indigo-200 rounded-lg text-sm">
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-indigo-700">ถึง:</span>
+                    <input type="date" id="dash-end" class="p-2 border border-indigo-200 rounded-lg text-sm">
+                </div>
+                <button onclick="fetchCustomRange()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 shadow-sm">
+                    ประมวลผล
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto bg-gray-50 flex-1">
+                <div id="dashboardLoading" class="hidden text-center py-10">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-400 mb-2"></i>
+                    <p class="text-gray-500">กำลังประมวลผลข้อมูล...</p>
+                    <p class="text-xs text-gray-400 mt-1">(การดึงข้อมูลย้อนหลังอาจใช้เวลาสักครู่)</p>
+                </div>
+
+                <div id="dashboardContent">
+                    <!-- Top Stats -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-xs text-gray-500 mb-1">การลาทั้งหมด</div>
+                            <div class="text-2xl font-bold text-gray-800" id="dash-total">0</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-xs text-gray-500 mb-1">ลาป่วยสูงสุด</div>
+                            <div class="text-lg font-bold text-yellow-600 truncate" id="dash-top-sick">-</div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <div class="text-xs text-gray-500 mb-1">ขาดเรียนสูงสุด</div>
+                            <div class="text-lg font-bold text-red-600 truncate" id="dash-top-absent">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Area -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h4 class="font-bold text-gray-700 mb-4 text-sm">สัดส่วนการมาเรียน</h4>
+                            <div class="aspect-square relative flex justify-center">
+                                <canvas id="pieChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h4 class="font-bold text-gray-700 mb-4 text-sm">สถิติแยกตามประเภท</h4>
+                            <div class="relative h-64">
+                                <canvas id="barChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl modal-enter overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-share-from-square mr-2 text-green-600"></i>ส่งออกข้อความ</h3>
+                <button onclick="closeExportModal()" class="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 flex-1 overflow-hidden flex flex-col">
+                <div class="flex justify-center bg-gray-100 p-1 rounded-lg mb-4 shrink-0">
+                    <label class="flex-1 text-center cursor-pointer">
+                        <input type="radio" name="exportOption" value="withReason" class="peer sr-only" checked onchange="updateExportPreview()">
+                        <div class="py-2 text-sm font-medium rounded-md peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-gray-500 transition-all">แบบมีเหตุผล</div>
+                    </label>
+                    <label class="flex-1 text-center cursor-pointer">
+                        <input type="radio" name="exportOption" value="noReason" class="peer sr-only" onchange="updateExportPreview()">
+                        <div class="py-2 text-sm font-medium rounded-md peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-gray-500 transition-all">แบบไม่มีเหตุผล</div>
+                    </label>
+                </div>
+                <div class="relative flex-1 border rounded-xl overflow-hidden bg-gray-50">
+                    <div class="absolute top-2 right-2 bg-gray-200 text-gray-500 text-xs px-2 py-1 rounded">ตัวอย่างข้อความ</div>
+                    <textarea id="exportPreview" class="w-full h-full p-4 bg-transparent resize-none focus:outline-none font-mono text-sm leading-relaxed" readonly></textarea>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-100">
+                <button onclick="copyFromPreview()" class="w-full py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-md shadow-green-200 transition-all active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-regular fa-copy"></i> คัดลอกข้อความ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto Leave Modal -->
+    <div id="autoLeaveModal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl modal-enter flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-calendar-days mr-2 text-blue-600"></i>จัดการการลาล่วงหน้า</h3>
+                <button onclick="closeAutoLeaveModal()" class="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="flex border-b border-gray-200">
+                <button onclick="switchTab('new')" id="tab-new" class="flex-1 py-3 text-sm font-bold text-blue-600 border-b-2 border-blue-600 bg-blue-50/50">สร้างรายการใหม่</button>
+                <button onclick="switchTab('list')" id="tab-list" class="flex-1 py-3 text-sm font-medium text-gray-500 hover:text-gray-700">รายการที่บันทึกไว้</button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <!-- Tab: New -->
+                <div id="content-new" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">เลือกนักเรียน</label>
+                        <select id="auto-student" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"></select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-sm font-semibold text-gray-700 mb-1">ตั้งแต่วันที่</label><input type="date" id="auto-start" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm"></div>
+                        <div><label class="block text-sm font-semibold text-gray-700 mb-1">ถึงวันที่</label><input type="date" id="auto-end" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm"></div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">ประเภทการลา</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="cursor-pointer"><input type="radio" name="auto-type" value="sick" class="peer sr-only" checked><div class="p-2 text-center rounded-lg border border-gray-200 peer-checked:bg-yellow-100 peer-checked:border-yellow-400 peer-checked:text-yellow-700 text-sm transition-all">ลาป่วย</div></label>
+                            <label class="cursor-pointer"><input type="radio" name="auto-type" value="business" class="peer sr-only"><div class="p-2 text-center rounded-lg border border-gray-200 peer-checked:bg-blue-100 peer-checked:border-blue-400 peer-checked:text-blue-700 text-sm transition-all">ลากิจ</div></label>
+                            <label class="cursor-pointer"><input type="radio" name="auto-type" value="absent" class="peer sr-only"><div class="p-2 text-center rounded-lg border border-gray-200 peer-checked:bg-red-100 peer-checked:border-red-400 peer-checked:text-red-700 text-sm transition-all">ขาด</div></label>
+                        </div>
+                    </div>
+                    <div><label class="block text-sm font-semibold text-gray-700 mb-1">เหตุผล</label><input type="text" id="auto-reason" placeholder="ระบุเหตุผล..." class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:border-blue-500 outline-none"></div>
+                    <button onclick="saveAutoLeave()" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md transition-all active:scale-95">บันทึกการลา</button>
+                </div>
+                <!-- Tab: List -->
+                <div id="content-list" class="hidden space-y-3">
+                    <div id="autoLeaveListContainer" class="space-y-2"></div>
+                    <div id="emptyAutoList" class="hidden flex flex-col items-center justify-center py-8 text-gray-400"><i class="fa-regular fa-folder-open text-4xl mb-2"></i><p class="text-sm">ไม่มีรายการลาล่วงหน้า</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/50 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl modal-enter overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-gear mr-2 text-gray-600"></i>ตั้งค่าการเชื่อมต่อ</h3>
+                <button onclick="closeSettingsModal()" class="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-blue-50 text-blue-700 p-4 rounded-lg text-sm border border-blue-100">
+                    <i class="fa-solid fa-circle-info mr-2"></i>
+                    URL ของ Web App ที่เชื่อมต่อกับ Google Sheet
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Google Script Web App URL</label>
+                    <input type="text" id="script-url-input" class="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg text-sm focus:border-blue-500 outline-none">
+                </div>
+                <button onclick="saveSettings()" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md transition-all">
+                    บันทึกการตั้งค่า
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-300 z-[70] flex items-center gap-2">
+        <i class="fa-solid fa-circle-check text-green-400"></i>
+        <span id="toastMsg">บันทึกเรียบร้อยแล้ว</span>
+    </div>
+
+    <script>
+        const STUDENTS = [
+            { id: 1, prefix: 'นางสาว', name: 'ซัลมียา', surname: 'อาแว' }, { id: 2, prefix: 'นางสาว', name: 'บาซีเราะห์', surname: 'สาแล๊ะ' },
+            { id: 3, prefix: 'นางสาว', name: 'ฟาเต็น', surname: 'มามุ' }, { id: 4, prefix: 'นางสาว', name: 'นัสรินทร์', surname: 'รายะ' },
+            { id: 5, prefix: 'นาย', name: 'คาดาฟฟี', surname: 'มะนามิง' }, { id: 6, prefix: 'นาย', name: 'ซูเฟียน', surname: 'สะแปอิง' },
+            { id: 7, prefix: 'นาย', name: 'ฟิรมัน', surname: 'อาแว' }, { id: 8, prefix: 'นาย', name: 'มูฮำมัดอัลฟาน', surname: 'อาแซ' },
+            { id: 9, prefix: 'นางสาว', name: 'นูรูลอามัล', surname: 'เจ๊ะแม' }, { id: 10, prefix: 'นางสาว', name: 'โนรอาดีลา', surname: 'หามะ' },
+            { id: 11, prefix: 'นางสาว', name: 'รูดีนาห์', surname: 'นาแว' }, { id: 12, prefix: 'นางสาว', name: 'อัลวานีย์', surname: 'ดาโอะ' },
+            { id: 13, prefix: 'นางสาว', name: 'อานิส', surname: 'สะมะแอ' }, { id: 14, prefix: 'นางสาว', name: 'ณาตาซาห์', surname: 'อาแวเลาะห์' },
+            { id: 15, prefix: 'นางสาว', name: 'เจ๊ะซีตีนุรไอซะห์', surname: 'เจะนะ' }, { id: 16, prefix: 'นางสาว', name: 'เจ๊ะรอฮานา', surname: 'บินอาแว' },
+            { id: 17, prefix: 'นางสาว', name: 'ซาอูดา', surname: 'สะมะแอ' }, { id: 18, prefix: 'นางสาว', name: 'ซาฮีดา', surname: 'เจ๊ะเงาะ' },
+            { id: 19, prefix: 'นางสาว', name: 'ซูรายา', surname: 'ยูโซ๊ะ' }, { id: 20, prefix: 'นางสาว', name: 'นาเดีย', surname: 'วอสา' },
+            { id: 21, prefix: 'นางสาว', name: 'นูร์ซาฟีนา', surname: 'และเหย็บ' }, { id: 22, prefix: 'นางสาว', name: 'นูรฟารีซาร์', surname: 'ดอเลาะ' },
+            { id: 23, prefix: 'นางสาว', name: 'นูรมี', surname: 'ยูนุ๊' }, { id: 24, prefix: 'นางสาว', name: 'นูรอัยดา', surname: 'นุห์' },
+            { id: 25, prefix: 'นางสาว', name: 'ฟาซีฮะห์', surname: 'บือซา' }, { id: 26, prefix: 'นางสาว', name: 'แวซง', surname: 'แวอาแซ' },
+            { id: 27, prefix: 'นางสาว', name: 'แวอัสมา', surname: 'เจ๊ะแน' }, { id: 28, prefix: 'นางสาว', name: 'อาลียาใหม่ซาระห์', surname: 'บือราเฮง' },
+            { id: 29, prefix: 'นาย', name: 'วันมูหะมัดนาอีม', surname: 'สติรักษ์' }
+        ];
+
+        let SCRIPT_URL = localStorage.getItem('SCRIPT_URL') || 'https://script.google.com/macros/s/AKfycbyf39AYaM_0NTpbmljtjdMM8CTeydDxX8o9GtqlX0R1ia4zHnRPyUKLrMReRjfzDDEv/exec';
+        
+        let currentDate = new Date();
+        let timeOffset = 0; 
+        let dailyAttendance = {}; 
+        let autoLeaves = []; 
+        let isOffline = false;
+        
+        let pieChartInstance = null;
+        let barChartInstance = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            syncTimeWithAPI(); 
+            renderStudentList();
+            if (SCRIPT_URL) {
+                document.getElementById('script-url-input').value = SCRIPT_URL; 
+                loadData();
+            } else {
+                openSettingsModal();
+            }
+        });
+
+        async function syncTimeWithAPI() {
+            try {
+                const res = await fetch('https://worldtimeapi.org/api/timezone/Asia/Bangkok');
+                const data = await res.json();
+                const serverTime = new Date(data.datetime);
+                const localTime = new Date();
+                timeOffset = serverTime - localTime; 
+                currentDate = new Date(new Date().getTime() + timeOffset);
+                updateUI(); 
+            } catch (e) {
+                console.warn("Time Sync failed, using local time:", e);
+            }
+        }
+
+        function getNow() {
+            return new Date(new Date().getTime() + timeOffset);
+        }
+
+        function getISODate(d) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        async function loadData() {
+            if (!SCRIPT_URL) { isOffline = true; showToast('โหมดทดลอง'); return; }
+            document.getElementById('currentDateDisplay').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลด...';
+            
+            const dateStr = getISODate(currentDate);
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=get_data&date=${dateStr}`);
+                const data = await response.json();
+                dailyAttendance = data.attendance || {};
+                autoLeaves = data.autoLeaves || [];
+                isOffline = false;
+                updateUI();
+            } catch (e) {
+                console.error("Load Error", e);
+                showToast('โหลดข้อมูลไม่สำเร็จ');
+                isOffline = true;
+                updateUI();
+            }
+        }
+
+        function getThaiDate(d) {
+            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+            const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const year = d.getFullYear() + 543;
+            return `วัน ${days[d.getDay()]}ที่ ${d.getDate()} เดือน ${months[d.getMonth()]} ${year}`;
+        }
+
+        function getComputedAttendance(studentId, specificDate = null) {
+            const targetDate = specificDate || currentDate;
+            const dateStr = getISODate(targetDate);
+            
+            if (!specificDate || getISODate(specificDate) === getISODate(currentDate)) {
+                const manual = dailyAttendance[studentId];
+                if (manual) return manual;
+            }
+
+            const auto = autoLeaves.find(l => 
+                l.studentId == studentId && 
+                dateStr >= l.startDate && 
+                dateStr <= l.endDate
+            );
+
+            if (auto) return { status: auto.type, reason: auto.reason, isAuto: true };
+            return { status: 'present', reason: '' };
+        }
+
+        window.setStatus = async (studentId, status) => {
+            const current = getComputedAttendance(studentId);
+            const newStatus = (current.status === status && !current.isAuto) ? 'present' : status;
+            dailyAttendance[studentId] = { status: newStatus, reason: current.reason || '' };
+            updateUI();
+            await saveSingleRecord(studentId, newStatus, dailyAttendance[studentId].reason);
+        };
+
+        window.setReason = async (studentId, reason) => {
+            const current = getComputedAttendance(studentId);
+            const newStatus = (current.status === 'present' && reason.trim() !== '') ? 'sick' : current.status;
+            dailyAttendance[studentId] = { status: newStatus, reason: reason };
+            await saveSingleRecord(studentId, newStatus, reason);
+        };
+
+        let activeSaves = 0;
+        async function saveSingleRecord(studentId, status, reason) {
+            if (!SCRIPT_URL) return;
+            activeSaves++;
+            updateSaveIndicator();
+            const s = STUDENTS.find(x => x.id === studentId);
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        action: 'save_attendance',
+                        date: getISODate(currentDate),
+                        studentId: studentId,
+                        name: s.name + ' ' + s.surname,
+                        status: status,
+                        reason: reason
+                    })
+                });
+            } catch (e) { console.error("Save failed", e); } 
+            finally { activeSaves--; updateSaveIndicator(); }
+        }
+        
+        function updateSaveIndicator() {
+            const el = document.getElementById('savingIndicator');
+            if (activeSaves > 0) {
+                el.classList.add('show');
+                el.querySelector('span').textContent = `กำลังบันทึก... (${activeSaves})`;
+            } else { el.classList.remove('show'); }
+        }
+
+        window.changeDate = (days) => {
+            currentDate.setDate(currentDate.getDate() + days);
+            dailyAttendance = {}; 
+            loadData();
+        };
+
+        // --- Dashboard Logic ---
+        window.openAdminLogin = () => document.getElementById('adminLoginModal').classList.remove('hidden');
+        window.closeAdminLogin = () => {
+            document.getElementById('adminLoginModal').classList.add('hidden');
+            document.getElementById('adminPassword').value = '';
+        }
+        
+        window.checkAdminPassword = () => {
+            const pwd = document.getElementById('adminPassword').value;
+            if (pwd === '000123') {
+                closeAdminLogin();
+                openDashboard();
+            } else {
+                alert('รหัสผ่านไม่ถูกต้อง');
+            }
+        };
+
+        window.openDashboard = () => {
+            document.getElementById('dashboardModal').classList.remove('hidden');
+            loadDashboard('today'); 
+        };
+        window.closeDashboard = () => document.getElementById('dashboardModal').classList.add('hidden');
+
+        window.loadDashboard = async (range) => {
+            ['today', 'week', 'month', 'custom'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === range) {
+                    btn.classList.add('text-indigo-600', 'border-b-2', 'border-indigo-600', 'bg-indigo-50/50');
+                    btn.classList.remove('text-gray-500');
+                } else {
+                    btn.classList.remove('text-indigo-600', 'border-b-2', 'border-indigo-600', 'bg-indigo-50/50');
+                    btn.classList.add('text-gray-500');
+                }
+            });
+
+            const customPicker = document.getElementById('customRangeSelector');
+            if (range === 'custom') {
+                customPicker.classList.remove('hidden');
+                document.getElementById('dashboardContent').classList.add('hidden');
+                return; 
+            } else {
+                customPicker.classList.add('hidden');
+            }
+
+            performDashboardFetch(range);
+        };
+
+        window.fetchCustomRange = () => {
+            const s = document.getElementById('dash-start').value;
+            const e = document.getElementById('dash-end').value;
+            if(!s || !e) return alert("กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด");
+            if(s > e) return alert("วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด");
+            
+            performDashboardFetch('custom', s, e);
+        }
+
+        async function performDashboardFetch(range, customStart, customEnd) {
+            const loading = document.getElementById('dashboardLoading');
+            const content = document.getElementById('dashboardContent');
+            
+            loading.classList.remove('hidden');
+            content.classList.add('hidden');
+
+            const datesToFetch = [];
+            const endDate = getNow();
+            let startDate = new Date(endDate);
+
+            if (range === 'today') {
+                datesToFetch.push(getISODate(endDate));
+            } else if (range === 'week') {
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(endDate);
+                    d.setDate(d.getDate() - i);
+                    datesToFetch.push(getISODate(d));
+                }
+            } else if (range === 'month') {
+                startDate.setDate(1); 
+                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                    datesToFetch.push(getISODate(d));
+                }
+            } else if (range === 'custom') {
+                let d = new Date(customStart);
+                const end = new Date(customEnd);
+                while(d <= end) {
+                    datesToFetch.push(getISODate(d));
+                    d.setDate(d.getDate() + 1);
+                }
+            }
+
+            if(datesToFetch.length > 60) {
+                if(!confirm(`คุณกำลังจะดึงข้อมูล ${datesToFetch.length} วัน ซึ่งอาจใช้เวลานาน ยืนยัน?`)) {
+                    loading.classList.add('hidden');
+                    return;
+                }
+            }
+
+            let aggregatedStats = { present: 0, sick: 0, business: 0, absent: 0, students: {} };
+            STUDENTS.forEach(s => aggregatedStats.students[s.id] = { sick: 0, absent: 0 });
+
+            if (range === 'today') {
+                STUDENTS.forEach(s => {
+                    const r = getComputedAttendance(s.id);
+                    aggregatedStats[r.status]++;
+                    if(r.status === 'sick') aggregatedStats.students[s.id].sick++;
+                    if(r.status === 'absent') aggregatedStats.students[s.id].absent++;
+                });
+            } else {
+                const promises = datesToFetch.map(date => 
+                    fetch(`${SCRIPT_URL}?action=get_data&date=${date}`)
+                        .then(r => r.json())
+                        .catch(() => ({}))
+                );
+                
+                const results = await Promise.all(promises);
+                
+                results.forEach((data, idx) => {
+                    const dailyAtt = data.attendance || {};
+                    const dailyAuto = data.autoLeaves || [];
+                    const dateStr = datesToFetch[idx];
+
+                    STUDENTS.forEach(s => {
+                        let status = 'present';
+                        if (dailyAtt[s.id]) status = dailyAtt[s.id].status;
+                        else {
+                            const auto = dailyAuto.find(l => 
+                                l.studentId == s.id && dateStr >= l.startDate && dateStr <= l.endDate
+                            );
+                            if (auto) status = auto.type;
+                        }
+                        
+                        aggregatedStats[status]++;
+                        if(status === 'sick') aggregatedStats.students[s.id].sick++;
+                        if(status === 'absent') aggregatedStats.students[s.id].absent++;
+                    });
+                });
+            }
+
+            renderDashboard(aggregatedStats);
+            loading.classList.add('hidden');
+            content.classList.remove('hidden');
+        }
+
+        function renderDashboard(stats) {
+            const totalLeave = stats.sick + stats.business + stats.absent;
+            document.getElementById('dash-total').textContent = totalLeave;
+
+            let topSick = { name: '-', count: 0 };
+            let topAbsent = { name: '-', count: 0 };
+
+            STUDENTS.forEach(s => {
+                const st = stats.students[s.id];
+                if(st.sick > topSick.count) topSick = { name: s.name, count: st.sick };
+                if(st.absent > topAbsent.count) topAbsent = { name: s.name, count: st.absent };
+            });
+
+            document.getElementById('dash-top-sick').textContent = topSick.count > 0 ? `${topSick.name} (${topSick.count})` : '-';
+            document.getElementById('dash-top-absent').textContent = topAbsent.count > 0 ? `${topAbsent.name} (${topAbsent.count})` : '-';
+
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+
+            if (pieChartInstance) pieChartInstance.destroy();
+            if (barChartInstance) barChartInstance.destroy();
+
+            pieChartInstance = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: ['มาเรียน', 'ลาป่วย', 'ลากิจ', 'ขาด'],
+                    datasets: [{
+                        data: [stats.present, stats.sick, stats.business, stats.absent],
+                        backgroundColor: ['#22c55e', '#eab308', '#3b82f6', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            barChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['ลาป่วย', 'ลากิจ', 'ขาด'],
+                    datasets: [{
+                        label: 'จำนวนครั้ง',
+                        data: [stats.sick, stats.business, stats.absent],
+                        backgroundColor: ['#eab308', '#3b82f6', '#ef4444'],
+                        borderRadius: 5
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+            });
+        }
+
+        window.openExportModal = () => { document.getElementById('exportModal').classList.remove('hidden'); updateExportPreview(); };
+        window.closeExportModal = () => document.getElementById('exportModal').classList.add('hidden');
+        window.updateExportPreview = () => {
+            const withReason = document.querySelector('input[name="exportOption"]:checked').value === 'withReason';
+            const text = generateExportText(withReason);
+            document.getElementById('exportPreview').value = text;
+        };
+        window.copyFromPreview = () => {
+            const copyText = document.getElementById("exportPreview");
+            copyText.select(); document.execCommand("copy");
+            showToast('คัดลอกข้อความแล้ว'); closeExportModal();
+        };
+
+        function generateExportText(withReason) {
+            let text = `หัวข้อของข้อความ นักเรียนที่ลาชั้นมัธยมศึกษาปีที่ 6/7\n`;
+            const d = currentDate;
+            const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+            const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const dateStr = `วัน ${days[d.getDay()]}ที่ ${d.getDate()} เดือน ${months[d.getMonth()]} ${d.getFullYear() + 543}`;
+            text += `${dateStr}\n`;
+            const absentees = STUDENTS.filter(s => { const r = getComputedAttendance(s.id); return r.status !== 'present'; });
+            if (absentees.length === 0) { text += "ไม่มีนักเรียนลาในวันนี้"; } else {
+                absentees.forEach((s, index) => {
+                    const r = getComputedAttendance(s.id);
+                    let label = r.status === 'sick' ? 'ลาป่วย' : (r.status === 'business' ? 'ลากิจ' : 'ขาด');
+                    let reasonText = ""; if (withReason && r.reason) reasonText = ` (${r.reason})`;
+                    text += `${index + 1}.${s.prefix}${s.name} ${s.surname} (เลขที่ ${s.id}) ${label}${reasonText}\n`;
+                });
+            }
+            return text;
+        }
+
+        window.openAutoLeaveModal = () => document.getElementById('autoLeaveModal').classList.remove('hidden');
+        window.closeAutoLeaveModal = () => document.getElementById('autoLeaveModal').classList.add('hidden');
+        
+        // *** UPDATED: Save Auto Leave AND Batch Save Daily Records ***
+        window.saveAutoLeave = async () => {
+            const studentId = parseInt(document.getElementById('auto-student').value);
+            const startStr = document.getElementById('auto-start').value;
+            const endStr = document.getElementById('auto-end').value;
+            const type = document.querySelector('input[name="auto-type"]:checked').value;
+            const reason = document.getElementById('auto-reason').value;
+
+            if (!startStr || !endStr) return alert('กรุณาระบุวันที่');
+            if (startStr > endStr) return alert('วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด');
+
+            const newId = Date.now().toString();
+            
+            // Fix: Use string date construction to avoid time shifts
+            autoLeaves.push({ id: newId, studentId, startDate: startStr, endDate: endStr, type, reason });
+            renderAutoLeaveList();
+            
+            const viewDate = getISODate(currentDate);
+            if(viewDate >= startStr && viewDate <= endStr) {
+                updateUI();
+            }
+
+            showToast('บันทึกการลาล่วงหน้าแล้ว');
+            document.getElementById('auto-reason').value = '';
+            
+            if (!isOffline) {
+                activeSaves++; 
+                updateSaveIndicator();
+                
+                try {
+                    // 1. Save Rule
+                    await fetch(SCRIPT_URL, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                        body: JSON.stringify({ 
+                            action: 'save_auto_leave', 
+                            id: newId, studentId, startDate: startStr, endDate: endStr, type, reason 
+                        }) 
+                    });
+
+                    // 2. Daily records
+                    const dailyRecords = [];
+                    // Parse safely: Year, Month-1, Day
+                    const sParts = startStr.split('-').map(Number);
+                    const eParts = endStr.split('-').map(Number);
+                    
+                    let d = new Date(sParts[0], sParts[1]-1, sParts[2]);
+                    const endDateObj = new Date(eParts[0], eParts[1]-1, eParts[2]);
+                    
+                    const s = STUDENTS.find(x => x.id === studentId);
+
+                    while(d <= endDateObj) {
+                        dailyRecords.push({
+                            date: getISODate(d),
+                            studentId: studentId,
+                            name: s.name + ' ' + s.surname,
+                            status: type,
+                            reason: reason
+                        });
+                        d.setDate(d.getDate() + 1);
+                    }
+
+                    // 3. Batch Save
+                    await fetch(SCRIPT_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({
+                            action: 'batch_save_attendance',
+                            records: dailyRecords
+                        })
+                    });
+
+                } catch(e) {
+                    console.error("Auto leave save failed", e);
+                } finally { 
+                    activeSaves--; 
+                    updateSaveIndicator(); 
+                } 
+            }
+        };
+
+        window.deleteAutoLeave = async (id) => {
+            if(!confirm('ต้องการลบรายการนี้ใช่หรือไม่?')) return;
+            id = String(id); 
+            autoLeaves = autoLeaves.filter(l => String(l.id) !== id);
+            renderAutoLeaveList(); 
+            updateUI();
+            if (!isOffline) { 
+                activeSaves++; updateSaveIndicator(); 
+                try { 
+                    await fetch(SCRIPT_URL, { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, 
+                        body: JSON.stringify({ action: 'delete_auto_leave', id: id }) 
+                    }); 
+                } finally { activeSaves--; updateSaveIndicator(); } 
+            }
+        };
+
+        function updateUI() {
+            document.getElementById('currentDateDisplay').textContent = getThaiDate(currentDate);
+            let counts = { present: 0, sick: 0, business: 0, absent: 0 };
+            STUDENTS.forEach(s => {
+                const record = getComputedAttendance(s.id);
+                counts[record.status]++;
+                const row = document.getElementById(`student-row-${s.id}`);
+                if (!row) return;
+                ['present', 'sick', 'business', 'absent'].forEach(st => {
+                    const btn = row.querySelector(`.btn-${st}`);
+                    if (!btn) return;
+                    if (st === record.status) {
+                        btn.classList.add('active', 'ring-2', 'ring-offset-1');
+                        if (st === 'sick') btn.classList.add('bg-yellow-100', 'text-yellow-700', 'border-yellow-300', 'ring-yellow-300');
+                        else if (st === 'business') btn.classList.add('bg-blue-100', 'text-blue-700', 'border-blue-300', 'ring-blue-300');
+                        else if (st === 'absent') btn.classList.add('bg-red-100', 'text-red-700', 'border-red-300', 'ring-red-300');
+                    } else {
+                        btn.classList.remove('active', 'ring-2', 'ring-offset-1', 'bg-yellow-100', 'text-yellow-700', 'border-yellow-300', 'ring-yellow-300', 'bg-blue-100', 'text-blue-700', 'border-blue-300', 'ring-blue-300', 'bg-red-100', 'text-red-700', 'border-red-300', 'ring-red-300');
+                        btn.classList.add('bg-white', 'text-gray-500', 'border-gray-200', 'hover:bg-gray-50');
+                    }
+                });
+                const input = row.querySelector('.reason-input');
+                if (record.status === 'present') { input.classList.add('hidden'); input.value = ''; } else { input.classList.remove('hidden'); input.value = record.reason || ''; }
+                const nameEl = row.querySelector('.student-name');
+                if (record.status !== 'present') nameEl.classList.add('text-red-600', 'font-bold'); else nameEl.classList.remove('text-red-600', 'font-bold');
+            });
+            document.getElementById('count-present').textContent = counts.present;
+            document.getElementById('count-sick').textContent = counts.sick;
+            document.getElementById('count-business').textContent = counts.business;
+            document.getElementById('count-absent').textContent = counts.absent;
+        }
+
+        function renderStudentList() {
+            const container = document.getElementById('studentList');
+            container.innerHTML = STUDENTS.map(s => `
+                <div id="student-row-${s.id}" class="student-card p-4 flex flex-col md:flex-row items-center gap-4">
+                    <div class="flex-1 w-full flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-mono text-gray-500">${s.id}</div>
+                        <div class="flex-1">
+                            <div class="student-name text-gray-700 text-lg transition-colors">${s.prefix}${s.name} ${s.surname}</div>
+                            <input type="text" onchange="setReason(${s.id}, this.value)" class="reason-input hidden mt-2 w-full text-sm border-b border-gray-300 focus:border-blue-500 outline-none py-1 bg-transparent placeholder-gray-400" placeholder="ระบุเหตุผล...">
+                        </div>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
+                        <button onclick="setStatus(${s.id}, 'sick')" class="status-btn btn-sick px-3 py-1.5 rounded-lg border text-sm whitespace-nowrap min-w-[60px]">ลาป่วย</button>
+                        <button onclick="setStatus(${s.id}, 'business')" class="status-btn btn-business px-3 py-1.5 rounded-lg border text-sm whitespace-nowrap min-w-[60px]">ลากิจ</button>
+                        <button onclick="setStatus(${s.id}, 'absent')" class="status-btn btn-absent px-3 py-1.5 rounded-lg border text-sm whitespace-nowrap min-w-[60px]">ขาด</button>
+                        <button onclick="setStatus(${s.id}, 'present')" class="ml-1 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-green-600 transition" title="รีเซ็ตเป็นมาเรียน"><i class="fa-solid fa-rotate-left"></i></button>
+                    </div>
+                </div>`).join('');
+            const select = document.getElementById('auto-student');
+            select.innerHTML = STUDENTS.map(s => `<option value="${s.id}">${s.id}. ${s.name} ${s.surname}</option>`).join('');
+            document.getElementById('auto-start').value = getISODate(getNow());
+            document.getElementById('auto-end').value = getISODate(getNow());
+        }
+
+        window.switchTab = (tab) => {
+            const btnNew = document.getElementById('tab-new'); const btnList = document.getElementById('tab-list');
+            const contentNew = document.getElementById('content-new'); const contentList = document.getElementById('content-list');
+            if (tab === 'new') {
+                btnNew.classList.add('text-blue-600', 'border-b-2', 'border-blue-600', 'bg-blue-50/50'); btnNew.classList.remove('text-gray-500');
+                btnList.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600', 'bg-blue-50/50'); btnList.classList.add('text-gray-500');
+                contentNew.classList.remove('hidden'); contentList.classList.add('hidden');
+            } else {
+                btnList.classList.add('text-blue-600', 'border-b-2', 'border-blue-600', 'bg-blue-50/50'); btnList.classList.remove('text-gray-500');
+                btnNew.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600', 'bg-blue-50/50'); btnNew.classList.add('text-gray-500');
+                contentList.classList.remove('hidden'); contentNew.classList.add('hidden');
+                renderAutoLeaveList();
+            }
+        };
+        function renderAutoLeaveList() {
+            const container = document.getElementById('autoLeaveListContainer'); const emptyState = document.getElementById('emptyAutoList');
+            if (autoLeaves.length === 0) { container.innerHTML = ''; emptyState.classList.remove('hidden'); return; }
+            emptyState.classList.add('hidden');
+            container.innerHTML = autoLeaves.map(l => {
+                const s = STUDENTS.find(st => st.id == l.studentId);
+                const typeLabel = l.type === 'sick' ? 'ลาป่วย' : (l.type === 'business' ? 'ลากิจ' : 'ขาด');
+                const colorClass = l.type === 'sick' ? 'text-yellow-600 bg-yellow-50' : (l.type === 'business' ? 'text-blue-600 bg-blue-50' : 'text-red-600 bg-red-50');
+                return `<div class="p-3 bg-white border border-gray-200 rounded-lg flex justify-between items-center"><div><div class="font-bold text-gray-700 text-sm">${s ? (s.id + '. ' + s.name) : 'Unknown'}</div><div class="text-xs text-gray-500 mt-0.5">${l.startDate} ถึง ${l.endDate}</div><div class="mt-1 inline-block px-2 py-0.5 rounded text-xs font-medium ${colorClass}">${typeLabel} ${l.reason ? `(${l.reason})` : ''}</div></div><button onclick="deleteAutoLeave('${l.id}')" class="text-gray-400 hover:text-red-500 p-2"><i class="fa-regular fa-trash-can"></i></button></div>`;
+            }).join('');
+        }
+        function showToast(msg) { const t = document.getElementById('toast'); document.getElementById('toastMsg').textContent = msg; t.classList.remove('opacity-0', 'translate-y-4'); setTimeout(() => { t.classList.add('opacity-0', 'translate-y-4'); }, 3000); }
+        
+        window.openSettingsModal = () => document.getElementById('settingsModal').classList.remove('hidden');
+        window.closeSettingsModal = () => document.getElementById('settingsModal').classList.add('hidden');
+        window.saveSettings = () => {
+            const url = document.getElementById('script-url-input').value.trim();
+            if (url) {
+                localStorage.setItem('SCRIPT_URL', url);
+                SCRIPT_URL = url;
+                loadData();
+                closeSettingsModal();
+                showToast('บันทึกการเชื่อมต่อแล้ว');
+            }
+        };
+    </script>
+</body>
+</html>
